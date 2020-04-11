@@ -1,5 +1,5 @@
 import click
-from os import path, mkdir, _exit, listdir, makedirs
+from os import path, mkdir, _exit, listdir, makedirs, sep
 from hashlib import sha256
 from shutil import copy
 import csv
@@ -8,14 +8,19 @@ import csv
 class Backup:
     def __init__(self, source, destination, exclude):
         self.source = source
-        self.destination = destination
         self.exclude = exclude
+        self.destination = destination
         self.first_run = True
         self.diff_file = path.join(destination, "diff_file.csv")
         self.file_list = []
         self.ignore_list = []
         self.hash_list = []
         self.backup_list = []
+        # if not destination.endswith("/"):
+        #     destination += "/"
+        #     self.destination = destination
+        # else:
+        #     self.destination = destination
 
     def setup_destination(self):
         if path.exists(self.destination):
@@ -38,7 +43,7 @@ class Backup:
                         continue
                     if blob in self.ignore_list:
                         continue
-                    self.file_list.append(blob)
+                    self.file_list.append(path.join(self.source, blob))
         except IOError:
             print(f"error reading {self.exclude}")
             _exit(-1)
@@ -52,8 +57,8 @@ class Backup:
 
     def generate_hash_list(self):
         for file in self.file_list:
-            hash = self.calc_hash(path.join(self.source, file))
-            self.hash_list.append((path.join(self.source, file), hash))
+            hash = self.calc_hash(file)
+            self.hash_list.append((file, hash))
 
     def flush_hashes_to_diff(self):
         with open(self.diff_file, "w+") as f:
@@ -73,17 +78,29 @@ class Backup:
                 if old_hash != new_hash:
                     self.backup_list.append(path)
 
+    def construct_backup_path(self, file_path):
+        file_path_array = file_path.split(sep)
+        dest_path_array = self.destination.split(sep)
+        for x in file_path_array:
+            dest_path_array.append(x)
+        dest_path = ""
+        for x in dest_path_array:
+            dest_path = path.join(dest_path, x)
+        return dest_path
+
     def begin_backup(self):
-        # if self.first_run == True:
-        for file_path in self.file_list:
-            backup_path = path.abspath(file_path)
-            # makedirs(path.dirname(self.destination + file_path), exist_ok=True)
-            # copy(file_path, self.destination + file_path)
-            # else:
-            #     for file_path in self.backup_list:
-            #         makedirs(path.dirname(self.destination + file_path), exist_ok=True)
-            #         copy(file_path, self.destination + file_path)
-            print(backup_path)
+        if self.first_run == True:
+            for file_path in self.file_list:
+                backup_path = self.construct_backup_path(file_path)
+                print(backup_path)
+                print("first run")
+                makedirs(path.dirname(backup_path), exist_ok=True)
+                copy(file_path, backup_path)
+        else:
+            for file_path in self.backup_list:
+                backup_path = self.construct_backup_path(file_path)
+                makedirs(path.dirname(backup_path), exist_ok=True)
+                copy(file_path, backup_path)
         self.flush_hashes_to_diff()
 
 
